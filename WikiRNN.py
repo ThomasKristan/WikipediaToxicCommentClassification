@@ -5,6 +5,8 @@
 # 00931524
 # Jan Moser
 # 51842006
+# Thomas Kristan
+# 51841768
 
 import tensorflow as tf
 from keras.preprocessing.text import Tokenizer
@@ -23,6 +25,7 @@ import seaborn as sns
 
 df_train_csv = pd.read_csv('train.csv')
 df_test_csv = pd.read_csv('test.csv')
+df_test_labels_csv = pd.read_csv('test_labels.csv')
 
 # <----- inspect data ------
 
@@ -33,6 +36,8 @@ print('-> test data without labels \n')
 
 df_train = df_train_csv[['comment_text']]
 df_label = df_train_csv.drop(columns=['comment_text', 'id']).fillna(0)
+df_test = df_test_csv[['comment_text']]
+df_test_labels = df_test_labels_csv.drop(columns=['id']).fillna(0)
 
 print(df_train.isnull().any())
 
@@ -62,6 +67,7 @@ print('-> some special characters !*#%$ are often used to censor \'bad\' words -
 max_features=10000
 
 words_train=df_train['comment_text'].str.lower()
+words_test=df_test['comment_text'].str.lower()
 
 tokenizer= Tokenizer(
     filters='"%&()+,-./:;<=>?@[\\]^_`{|}~\t\n',
@@ -69,8 +75,11 @@ tokenizer= Tokenizer(
     lower= True)
 
 tokenizer.fit_on_texts(list(words_train))
-
 tokenized_train=tokenizer.texts_to_sequences(words_train)
+tokenizer.fit_on_texts(list(words_test))
+tokenized_test=tokenizer.texts_to_sequences(words_test)
+
+
 
 num_words = [len(c) for c in tokenized_train]
 sns.histplot(data=num_words, bins=np.arange(0,250,10))
@@ -83,6 +92,12 @@ print('-> max 100 words necessary')
 max_len=100 
 
 train_x=pad_sequences(tokenized_train,maxlen=max_len)
+test_x=pad_sequences(tokenized_test,maxlen=max_len)
+
+# deleting rows labeled with value -1
+mask = df_test_labels['toxic'] >= 0
+test_labels = df_test_labels[mask]
+test_X = test_x[mask]
 
 # ----- prepare data ------>
 
@@ -200,7 +215,7 @@ def model_gru():
 
 
 # choose model
-model = model_gru()
+model_val = model_gru()
 
 
 callbacks_list = [
@@ -208,7 +223,7 @@ callbacks_list = [
             monitor='val_loss',patience=2,),
         ]
 
-history = model.fit(
+history = model_val.fit(
         train_x,
         df_label,
         epochs=epochs,
@@ -222,4 +237,19 @@ plot_history(history, trim=0)
 
 
 # predict
+
+model_test = model_gru()
+
+history = model_test.fit(
+        train_x,
+        df_label, 
+        epochs=epochs,
+        batch_size=batch_size,
+        callbacks=callbacks_list,
+        validation_data=(test_X, test_labels),
+        verbose=1
+        )
+
+plot_history(history, trim=0)
+
 
