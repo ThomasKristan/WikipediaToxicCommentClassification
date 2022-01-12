@@ -7,6 +7,8 @@
 # 51842006
 # Thomas Kristan
 # 51841768
+# Michael Pölzl
+# 51811422
 
 import tensorflow as tf
 from keras.preprocessing.text import Tokenizer
@@ -19,9 +21,8 @@ from keras.layers import Dense, Input, LSTM, Embedding, Dropout, Activation, GRU
 from keras.layers import Bidirectional, GlobalMaxPool1D, Flatten
 from keras.models import Model, Sequential
 from keras import initializers, regularizers, constraints, optimizers, layers
+import kerastuner as kt
 import seaborn as sns
-
-
 
 df_train_csv = pd.read_csv('train.csv')
 df_test_csv = pd.read_csv('test.csv')
@@ -34,8 +35,10 @@ print(df_test_csv.head())
 print('-> test data without labels \n')
 
 
+
 df_train = df_train_csv[['comment_text']]
 df_label = df_train_csv.drop(columns=['comment_text', 'id']).fillna(0)
+print(df_label.head(100))
 df_test = df_test_csv[['comment_text']]
 df_test_labels = df_test_labels_csv.drop(columns=['id']).fillna(0)
 
@@ -50,8 +53,6 @@ print( '''->This means multi label classification
 
 # df_label['non_toxic'] = (~df_label.sum(axis=1).astype('bool')).astype(int) -> nur für single label classsification
 
-
-
 print(df_train['comment_text'].str.len().describe())
 print( '->Avg 400 character per comment\n')
 
@@ -64,22 +65,30 @@ print('-> some special characters !*#%$ are often used to censor \'bad\' words -
 
 
 # <----- prepare data ------
+# define max words, only most common ones will be kept (10000 different words)
 max_features=10000
 
+# first sept of pre-processing: lower the words since words with capital letters would be treated 
+# different in the model (other position in the feature vectos).
+# Eg 'Nice' would be in a slighlty different location than 'nice' but they are semantically the same (same meaning)
 words_train=df_train['comment_text'].str.lower()
 words_test=df_test['comment_text'].str.lower()
 
+# vectorize a text corpus
+# apply filters on the words to eliminate special characters that do not carry any semantics relevant for classification.
 tokenizer= Tokenizer(
     filters='"%&()+,-./:;<=>?@[\\]^_`{|}~\t\n',
     num_words=max_features,
     lower= True)
 
+# apply tokenizer on comments
 tokenizer.fit_on_texts(list(words_train))
 tokenized_train=tokenizer.texts_to_sequences(words_train)
 tokenizer.fit_on_texts(list(words_test))
 tokenized_test=tokenizer.texts_to_sequences(words_test)
 
-
+print(words_test[0])
+print(tokenized_test[0])
 
 num_words = [len(c) for c in tokenized_train]
 sns.histplot(data=num_words, bins=np.arange(0,250,10))
@@ -213,10 +222,39 @@ def model_gru():
     print(model.summary())
     return model
 
+def model_gru_tuned(hp):
+    model = Sequential()
+    model.add(Embedding(20000, 64))
 
-# choose model
+     # Choose an optimal value between 32-512
+    hp_units = hp.Int('units', min_value=32, max_value=512, step=32)
+    model.add(GRU(units=hp_units, return_sequences=True))
+    model.add(Dropout(0.1))
+    hp_units_1 = hp.Int('units', min_value=32, max_value=512, step=32)
+    model.add(GRU(hp_units_1, return_sequences=True))
+    model.add(Dropout(0.3))
+    hp_units_2 = hp.Int('units', min_value=64, max_value=512, step=32)
+    model.add(GRU(hp_units_2, return_sequences=True))
+    model.add(Dropout(0.3))
+    model.add(GlobalMaxPool1D())
+    hp_units_3 = hp.Int('units', min_value=128, max_value=512, step=32)
+    model.add(Dense(hp_units_3, activation="relu"))
+    model.add(Dropout(0.1))
+    model.add(Dense(6, activation="sigmoid"))
+
+    hp_learning_rate = hp.Choice('learning_rate', values=[1e-2, 1e-3, 1e-4])
+
+    model.compile(
+            loss='binary_crossentropy',
+            optimizer= tf.keras.optimizers.Adam(lr=hp_learning_rate),
+            metrics=['accuracy'])
+
+    print(model.summary())
+    return model
+
+# <----- choose model ------
+"""
 model_val = model_gru()
-
 
 callbacks_list = [
         tf.keras.callbacks.EarlyStopping(
@@ -234,10 +272,25 @@ history = model_val.fit(
         )
 
 plot_history(history, trim=0)
+"""
+# ----- choose model ------>
 
+# <----- hyper parameter tunining ------
+"""
+tuner = kt.Hyperband(model_gru_tuned, # the hypermodel
+                     objective='val_accuracy', # objective to optimize
+                     max_epochs=10,
+                     factor=3, # factor which you have seen above 
+                     directory='.', # directory to save logs 
+                     project_name='khyperband')
+tuner.search_space_summary() 
 
-# predict
-
+stop_early = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=5)
+# Perform hypertuning
+tuner.search(train_x, df_label, epochs=10, validation_split=0.2, callbacks=[stop_early])
+# ----- hyper parameter tunining ------>
+"""
+# <----- predict ------
 model_test = model_gru()
 
 history = model_test.fit(
@@ -251,5 +304,5 @@ history = model_test.fit(
         )
 
 plot_history(history, trim=0)
-
+# ----- predict ------>
 
