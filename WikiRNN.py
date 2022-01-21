@@ -83,9 +83,11 @@ tokenizer= Tokenizer(
 
 # apply tokenizer on comments
 tokenizer.fit_on_texts(list(words_train))
-tokenized_train=tokenizer.texts_to_sequences(words_train)
+#converts text into sequence of integers, each number shows how many times the word occured
+tokenized_train=tokenizer.texts_to_sequences(words_train) 
 tokenizer.fit_on_texts(list(words_test))
 tokenized_test=tokenizer.texts_to_sequences(words_test)
+
 
 print(words_test[0])
 print(tokenized_test[0])
@@ -100,7 +102,8 @@ print('-> max 100 words necessary')
 
 max_len=100 
 
-train_x=pad_sequences(tokenized_train,maxlen=max_len)
+# create equal sized  2D Numpy arrays 
+train_x=pad_sequences(tokenized_train,maxlen=max_len) 
 test_x=pad_sequences(tokenized_test,maxlen=max_len)
 
 # deleting rows labeled with value -1
@@ -222,24 +225,25 @@ def model_gru():
     print(model.summary())
     return model
 
+# using the best model und use the keras-tuner framework
 def model_gru_tuned(hp):
     model = Sequential()
     model.add(Embedding(20000, 64))
 
      # Choose an optimal value between 32-512
-    hp_units = hp.Int('units', min_value=32, max_value=512, step=32)
+    hp_units = hp.Int('units_1', min_value=32, max_value=512, step=32)
     model.add(GRU(units=hp_units, return_sequences=True))
-    model.add(Dropout(0.1))
-    hp_units_1 = hp.Int('units', min_value=32, max_value=512, step=32)
+    model.add(Dropout(hp.Choice('droput_1', values=[0.1,0.2,0.3,0.4])))
+    hp_units_1 = hp.Int('units_2', min_value=32, max_value=512, step=32)
     model.add(GRU(hp_units_1, return_sequences=True))
-    model.add(Dropout(0.3))
-    hp_units_2 = hp.Int('units', min_value=64, max_value=512, step=32)
+    model.add(Dropout(hp.Choice('droput_2', values=[0.1,0.2,0.3,0.4])))
+    hp_units_2 = hp.Int('units_3', min_value=64, max_value=512, step=32)
     model.add(GRU(hp_units_2, return_sequences=True))
-    model.add(Dropout(0.3))
+    model.add(Dropout(hp.Choice('dropout_3', values=[0.1,0.2,0.3,0.4])))
     model.add(GlobalMaxPool1D())
-    hp_units_3 = hp.Int('units', min_value=128, max_value=512, step=32)
+    hp_units_3 = hp.Int('units_4', min_value=128, max_value=512, step=64)
     model.add(Dense(hp_units_3, activation="relu"))
-    model.add(Dropout(0.1))
+    model.add(Dropout(hp.Choice('dropout_4', values=[0.1,0.2,0.3,0.4])))
     model.add(Dense(6, activation="sigmoid"))
 
     hp_learning_rate = hp.Choice('learning_rate', values=[1e-2, 1e-3, 1e-4])
@@ -253,8 +257,8 @@ def model_gru_tuned(hp):
     return model
 
 # <----- choose model ------
-"""
-model_val = model_gru()
+
+model_val = model_gru() # best model used
 
 callbacks_list = [
         tf.keras.callbacks.EarlyStopping(
@@ -272,11 +276,12 @@ history = model_val.fit(
         )
 
 plot_history(history, trim=0)
-"""
-# ----- choose model ------>
 
+# ----- choose model ------>
+# uncomment to start hyper parameter tuning
+""""
 # <----- hyper parameter tunining ------
-"""
+
 tuner = kt.Hyperband(model_gru_tuned, # the hypermodel
                      objective='val_accuracy', # objective to optimize
                      max_epochs=10,
