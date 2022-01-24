@@ -19,9 +19,9 @@ import pandas as pd
 import numpy as np
 from keras.layers import Dense, Input, LSTM, Embedding, Dropout, Activation, GRU
 from keras.layers import Bidirectional, GlobalMaxPool1D, Flatten
-from keras.models import Model, Sequential
+from keras.models import Model, Sequential, load_model
 from keras import initializers, regularizers, constraints, optimizers, layers
-import kerastuner as kt
+#import kerastuner as kt
 import seaborn as sns
 
 df_train_csv = pd.read_csv('train.csv')
@@ -206,12 +206,12 @@ def model_bi():
 def model_gru():
     model = Sequential()
     model.add(Embedding(20000, 64))
-    model.add(GRU(32, return_sequences=True))
+    model.add(GRU(224, return_sequences=True))
     model.add(Dropout(0.1))
-    model.add(GRU(64, return_sequences=True))
-    model.add(Dropout(0.3))
-    model.add(GRU(100, return_sequences=True))
-    model.add(Dropout(0.3))
+    model.add(GRU(480, return_sequences=True))
+    model.add(Dropout(0.1))
+    model.add(GRU(256, return_sequences=True))
+    model.add(Dropout(0.1))
     model.add(GlobalMaxPool1D())
     model.add(Dense(256, activation="relu"))
     model.add(Dropout(0.1))
@@ -225,7 +225,7 @@ def model_gru():
     print(model.summary())
     return model
 
-# using the best model und use the keras-tuner framework
+# using the best model and fine tune it using the keras-tuner framework
 def model_gru_tuned(hp):
     model = Sequential()
     model.add(Embedding(20000, 64))
@@ -233,10 +233,10 @@ def model_gru_tuned(hp):
      # Choose an optimal value between 32-512
     hp_units = hp.Int('units_1', min_value=32, max_value=512, step=32)
     model.add(GRU(units=hp_units, return_sequences=True))
-    model.add(Dropout(hp.Choice('droput_1', values=[0.1,0.2,0.3,0.4])))
+    model.add(Dropout(hp.Choice('dropout_1', values=[0.1,0.2,0.3,0.4])))
     hp_units_1 = hp.Int('units_2', min_value=32, max_value=512, step=32)
     model.add(GRU(hp_units_1, return_sequences=True))
-    model.add(Dropout(hp.Choice('droput_2', values=[0.1,0.2,0.3,0.4])))
+    model.add(Dropout(hp.Choice('dropout_2', values=[0.1,0.2,0.3,0.4])))
     hp_units_2 = hp.Int('units_3', min_value=64, max_value=512, step=32)
     model.add(GRU(hp_units_2, return_sequences=True))
     model.add(Dropout(hp.Choice('dropout_3', values=[0.1,0.2,0.3,0.4])))
@@ -258,12 +258,12 @@ def model_gru_tuned(hp):
 
 # <----- choose model ------
 
-model_val = model_gru() # best model used
-
 callbacks_list = [
         tf.keras.callbacks.EarlyStopping(
             monitor='val_loss',patience=2,),
         ]
+
+model_val = model_gru() # best model used
 
 history = model_val.fit(
         train_x,
@@ -275,9 +275,12 @@ history = model_val.fit(
         verbose=1
         )
 
+#model_val.save("model_gru")
 plot_history(history, trim=0)
 
 # ----- choose model ------>
+
+# <----- hyper parameter tuning ------
 # uncomment to start hyper parameter tuning
 """"
 # <----- hyper parameter tunining ------
@@ -295,7 +298,10 @@ stop_early = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=5)
 tuner.search(train_x, df_label, epochs=10, validation_split=0.2, callbacks=[stop_early])
 # ----- hyper parameter tunining ------>
 """
-# <----- predict ------
+# ----- hyper parameter tuning ------>
+
+
+# <----- validation ------
 model_test = model_gru()
 
 history = model_test.fit(
@@ -309,5 +315,5 @@ history = model_test.fit(
         )
 
 plot_history(history, trim=0)
-# ----- predict ------>
+# ----- validation ------>
 
