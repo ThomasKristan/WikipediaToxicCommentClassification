@@ -28,6 +28,7 @@ df_train_csv = pd.read_csv('train.csv')
 df_test_csv = pd.read_csv('test.csv')
 df_test_labels_csv = pd.read_csv('test_labels.csv')
 
+
 # <----- inspect data ------
 
 print(df_train_csv.head())
@@ -74,6 +75,7 @@ max_features=10000
 words_train=df_train['comment_text'].str.lower()
 words_test=df_test['comment_text'].str.lower()
 
+
 # vectorize a text corpus
 # apply filters on the words to eliminate special characters that do not carry any semantics relevant for classification.
 tokenizer= Tokenizer(
@@ -87,6 +89,8 @@ tokenizer.fit_on_texts(list(words_train))
 tokenized_train=tokenizer.texts_to_sequences(words_train) 
 tokenizer.fit_on_texts(list(words_test))
 tokenized_test=tokenizer.texts_to_sequences(words_test)
+
+
 
 
 print(words_test[0])
@@ -106,10 +110,12 @@ max_len=100
 train_x=pad_sequences(tokenized_train,maxlen=max_len) 
 test_x=pad_sequences(tokenized_test,maxlen=max_len)
 
+
 # deleting rows labeled with value -1
 mask = df_test_labels['toxic'] >= 0
 test_labels = df_test_labels[mask]
 test_X = test_x[mask]
+
 
 # ----- prepare data ------>
 
@@ -317,3 +323,13 @@ history = model_test.fit(
 plot_history(history, trim=0)
 # ----- validation ------>
 
+#predicting trump tweets
+model_pred = load_model("model_final_test")
+
+df_trump = pd.read_csv('trump.csv')
+words_trump=df_trump['comment_text'].str.lower()
+tokenizer.fit_on_texts(list(words_trump))
+tokenized_trump=tokenizer.texts_to_sequences(words_trump)
+pred_trump=pad_sequences(tokenized_trump,maxlen=max_len)
+
+pred = model_pred.predict(pred_trump)
